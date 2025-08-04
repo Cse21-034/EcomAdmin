@@ -7,7 +7,7 @@ import {
   cartItems,
   contactMessages,
   type User,
-  type UpsertUser,
+  type InsertUser,
   type Category,
   type InsertCategory,
   type Product,
@@ -25,9 +25,17 @@ import { db } from "./db";
 import { eq, desc, and, like, gte, lte, inArray, count, sum, sql } from "drizzle-orm";
 
 export interface IStorage {
-  // User operations (mandatory for Replit Auth)
-  getUser(id: string): Promise<User | undefined>;
-  upsertUser(user: UpsertUser): Promise<User>;
+  // User operations for JWT authentication
+  getUserById(id: number): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  createUser(user: InsertUser & { password: string }): Promise<User>;
+  updateUser(id: number, user: Partial<User>): Promise<User>;
+  incrementUserTokenVersion(id: number): Promise<void>;
+  
+  // Supplier management
+  getPendingSuppliers(): Promise<User[]>;
+  approveSupplier(supplierId: number, adminId: number): Promise<User>;
+  deactivateUser(id: number): Promise<User>;
 
   // Category operations
   getCategories(): Promise<Category[]>;
@@ -43,7 +51,7 @@ export interface IStorage {
     maxPrice?: number;
     featured?: boolean;
     active?: boolean;
-    supplierId?: string;
+    supplierId?: number;
   }): Promise<Product[]>;
   getProduct(id: number): Promise<Product | undefined>;
   getProductBySlug(slug: string): Promise<Product | undefined>;
@@ -52,15 +60,15 @@ export interface IStorage {
   deleteProduct(id: number): Promise<void>;
 
   // Cart operations
-  getCartItems(userId?: string, sessionId?: string): Promise<CartItem[]>;
+  getCartItems(userId?: number, sessionId?: string): Promise<CartItem[]>;
   addToCart(item: InsertCartItem): Promise<CartItem>;
   updateCartItem(id: number, quantity: number): Promise<CartItem>;
   removeFromCart(id: number): Promise<void>;
-  clearCart(userId?: string, sessionId?: string): Promise<void>;
+  clearCart(userId?: number, sessionId?: string): Promise<void>;
 
   // Order operations
   createOrder(order: InsertOrder, items: InsertOrderItem[]): Promise<Order>;
-  getOrders(userId?: string): Promise<Order[]>;
+  getOrders(userId?: number): Promise<Order[]>;
   getOrder(id: number): Promise<Order | undefined>;
   updateOrderStatus(id: number, status: string): Promise<Order>;
 
@@ -71,29 +79,74 @@ export interface IStorage {
 
   // Admin-specific operations
   getUsersWithStats(): Promise<any[]>;
-  getSupplierStats(supplierId: string): Promise<any>;
+  getSupplierStats(supplierId: number): Promise<any>;
   getAdminStats(): Promise<any>;
   getAllOrders(): Promise<Order[]>;
 }
 
 export class DatabaseStorage implements IStorage {
-  // User operations
-  async getUser(id: string): Promise<User | undefined> {
+  // User operations for JWT authentication
+  async getUserById(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
   }
 
-  async upsertUser(userData: UpsertUser): Promise<User> {
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
+  async createUser(userData: InsertUser & { password: string }): Promise<User> {
+    const [user] = await db.insert(users).values(userData).returning();
+    return user;
+  }
+
+  async updateUser(id: number, userData: Partial<User>): Promise<User> {
     const [user] = await db
-      .insert(users)
-      .values(userData)
-      .onConflictDoUpdate({
-        target: users.id,
-        set: {
-          ...userData,
-          updatedAt: new Date(),
-        },
+      .update(users)
+      .set({ ...userData, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async incrementUserTokenVersion(id: number): Promise<void> {
+    await db
+      .update(users)
+      .set({ 
+        jwtTokenVersion: sql`${users.jwtTokenVersion} + 1`,
+        updatedAt: new Date()
       })
+      .where(eq(users.id, id));
+  }
+
+  // Supplier management
+  async getPendingSuppliers(): Promise<User[]> {
+    return await db
+      .select()
+      .from(users)
+      .where(and(eq(users.role, 'supplier'), eq(users.isApproved, false)));
+  }
+
+  async approveSupplier(supplierId: number, adminId: number): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({
+        isApproved: true,
+        approvedAt: new Date(),
+        approvedBy: adminId,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, supplierId))
+      .returning();
+    return user;
+  }
+
+  async deactivateUser(id: number): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(users.id, id))
       .returning();
     return user;
   }

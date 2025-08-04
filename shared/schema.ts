@@ -25,15 +25,21 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
-// User storage table with role support
+// User storage table with role support and JWT authentication
 export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: varchar("email").unique(),
-  firstName: varchar("first_name"),
-  lastName: varchar("last_name"),
+  id: serial("id").primaryKey(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  password: varchar("password", { length: 255 }).notNull(),
+  firstName: varchar("first_name", { length: 100 }),
+  lastName: varchar("last_name", { length: 100 }),
   profileImageUrl: varchar("profile_image_url"),
-  role: varchar("role").notNull().default("customer"), // 'admin', 'supplier', 'customer'
+  role: varchar("role", { length: 20 }).notNull().default("customer"), // 'admin', 'supplier', 'customer'
   isActive: boolean("is_active").notNull().default(true),
+  isApproved: boolean("is_approved").notNull().default(false), // For supplier approval
+  approvedAt: timestamp("approved_at"),
+  approvedBy: integer("approved_by").references(() => users.id),
+  jwtTokenVersion: integer("jwt_token_version").notNull().default(1), // For token invalidation
+  lastLogin: timestamp("last_login"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -68,7 +74,7 @@ export const products = pgTable("products", {
   dimensions: jsonb("dimensions"), // {length, width, height}
   images: text("images").array().default([]),
   categoryId: integer("category_id").references(() => categories.id),
-  supplierId: varchar("supplier_id").references(() => users.id).notNull(),
+  supplierId: integer("supplier_id").references(() => users.id).notNull(),
   tags: text("tags").array().default([]),
   featured: boolean("featured").notNull().default(false),
   active: boolean("active").notNull().default(true),
@@ -81,7 +87,7 @@ export const products = pgTable("products", {
 // Orders table
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
-  userId: varchar("user_id").references(() => users.id),
+  userId: integer("user_id").references(() => users.id),
   sessionId: varchar("session_id"),
   status: varchar("status").notNull().default("pending"), // pending, processing, shipped, delivered, cancelled
   total: decimal("total", { precision: 10, scale: 2 }).notNull(),
@@ -116,7 +122,7 @@ export const orderItems = pgTable("order_items", {
 // Cart items table
 export const cartItems = pgTable("cart_items", {
   id: serial("id").primaryKey(),
-  userId: varchar("user_id").references(() => users.id),
+  userId: integer("user_id").references(() => users.id),
   sessionId: varchar("session_id"),
   productId: integer("product_id").references(() => products.id).notNull(),
   quantity: integer("quantity").notNull(),
@@ -133,7 +139,7 @@ export const contactMessages = pgTable("contact_messages", {
   subject: varchar("subject", { length: 255 }),
   message: text("message").notNull(),
   status: varchar("status").notNull().default("unread"), // unread, read, responded
-  userId: varchar("user_id").references(() => users.id),
+  userId: integer("user_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -205,6 +211,23 @@ export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  jwtTokenVersion: true,
+  lastLogin: true,
+  approvedAt: true,
+  approvedBy: true,
+});
+
+export const loginSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+
+export const registerSchema = insertUserSchema.extend({
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  confirmPassword: z.string(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
 });
 
 export const insertCategorySchema = createInsertSchema(categories).omit({
@@ -242,7 +265,9 @@ export const insertContactMessageSchema = createInsertSchema(contactMessages).om
 });
 
 // Types
-export type UpsertUser = typeof users.$inferInsert;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type RegisterUser = z.infer<typeof registerSchema>;
+export type LoginUser = z.infer<typeof loginSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Category = typeof categories.$inferSelect;
