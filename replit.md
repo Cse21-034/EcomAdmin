@@ -82,7 +82,8 @@ Preferred communication style: Simple, everyday language.
 - **TypeScript** - Type safety across the entire stack
 
 ### Key Integrations
-- **Session persistence** via PostgreSQL using connect-pg-simple
+- **JWT token management** with automatic refresh and invalidation
 - **File uploads** and image handling for product management
 - **Real-time updates** through TanStack Query's background refetching
 - **Form validation** using Zod schemas shared between client and server
+- **Separate deployment** ready for Render (backend) and Vercel (frontend)
