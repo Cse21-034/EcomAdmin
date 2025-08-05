@@ -21,10 +21,12 @@ Preferred communication style: Simple, everyday language.
 ### Backend Architecture
 - **Express.js** server with TypeScript
 - **RESTful API** design with role-based access control
-- **Session-based authentication** using Replit's OpenID Connect integration
-- **PostgreSQL sessions** stored in database for persistent authentication
+- **JWT authentication** with secure token management
+- **Modular route structure** organized by functionality
 - **Role-based middleware** for protecting routes (admin, supplier, customer)
 - **Drizzle ORM** for type-safe database operations and migrations
+- **Security middleware** with CORS, helmet, and rate limiting
+- **Separated from frontend** for independent deployment
 
 ### Database Design
 - **PostgreSQL** as the primary database
@@ -35,11 +37,12 @@ Preferred communication style: Simple, everyday language.
 - **E-commerce entities**: users, categories, products, orders, cart items, contact messages
 
 ### Authentication & Authorization
-- **Replit Auth** integration using OpenID Connect
-- **Passport.js** strategy for authentication flow
-- **Session-based auth** with PostgreSQL session store
+- **JWT Authentication** with secure token-based authentication
+- **bcrypt** password hashing for security
 - **Role-based access control** (admin, supplier, customer)
-- **Protected routes** with middleware validation
+- **Supplier approval workflow** managed by admin users
+- **Protected routes** with JWT middleware validation
+- **Token invalidation** support for enhanced security
 
 ### State Management
 - **TanStack Query** for server state with optimistic updates
@@ -58,11 +61,15 @@ Preferred communication style: Simple, everyday language.
 
 ### Database & Hosting
 - **Neon Database** - Serverless PostgreSQL hosting
-- **Replit** - Development and hosting platform with integrated authentication
+- **Replit** - Development platform
+- **Ready for deployment** on Render (backend) and Vercel (frontend)
 
-### Authentication
-- **Replit Auth** - OpenID Connect authentication provider
-- **Passport.js** - Authentication middleware for Express
+### Authentication & Security
+- **jsonwebtoken** - JWT token generation and verification
+- **bcryptjs** - Password hashing and validation
+- **helmet** - Security headers middleware
+- **cors** - Cross-origin resource sharing
+- **express-rate-limit** - Rate limiting for API protection
 
 ### UI & Components
 - **Radix UI** - Headless UI component primitives
