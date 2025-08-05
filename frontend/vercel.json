@@ -9,6 +9,6 @@
     }
   ],
   "env": {
-    "VITE_API_URL": "@api-url"
+    "VITE_API_URL": "https://your-backend-url.com/api"
   }
 }
